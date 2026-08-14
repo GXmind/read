@@ -26,10 +26,10 @@ public class SearchActivity extends Activity {
     @Override public void onCreate(Bundle b){
         super.onCreate(b);getWindow().setStatusBarColor(Color.WHITE);getWindow().setNavigationBarColor(Color.WHITE);getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);build();
     }
-    private GradientDrawable rounded(int color,float radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(radius));return g;}
+    private GradientDrawable rounded(int color,float radius){GradientDrawable g=new GradientDrawable();g.setColor(color);g.setCornerRadius(dp(Math.max(radius,22)));return g;}
     private TextView text(String value,float size,int color){TextView t=new TextView(this);t.setText(value);t.setTextSize(size);t.setTextColor(color);t.setGravity(Gravity.CENTER_VERTICAL);return t;}
     private void build(){
-        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(20),dp(15),dp(20),0);root.setBackgroundColor(Color.WHITE);
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(20),dp(15),dp(20),0);root.setBackgroundColor(0xfffaf9f7);
         LinearLayout bar=new LinearLayout(this);bar.setGravity(Gravity.CENTER_VERTICAL);TextView back=text("‹",31,0xff333335);back.setGravity(Gravity.CENTER);back.setOnClickListener(v->finish());bar.addView(back,new LinearLayout.LayoutParams(dp(42),dp(52)));
         queryInput=new EditText(this);queryInput.setSingleLine();queryInput.setTextSize(16);queryInput.setHint("搜索书名或正文内容");queryInput.setPadding(dp(15),0,dp(12),0);queryInput.setBackground(rounded(0xfff4f4f5,22));queryInput.setImeOptions(EditorInfo.IME_ACTION_SEARCH);queryInput.setOnEditorActionListener((v,id,event)->{if(id==EditorInfo.IME_ACTION_SEARCH||(event!=null&&event.getKeyCode()==KeyEvent.KEYCODE_ENTER)){search();return true;}return false;});bar.addView(queryInput,new LinearLayout.LayoutParams(0,dp(44),1));
         TextView search=text("搜索",15,ACCENT);search.setTypeface(Typeface.DEFAULT,Typeface.BOLD);search.setGravity(Gravity.CENTER);search.setOnClickListener(v->search());bar.addView(search,new LinearLayout.LayoutParams(dp(58),dp(52)));root.addView(bar);
