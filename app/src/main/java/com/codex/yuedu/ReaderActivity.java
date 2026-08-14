@@ -15,13 +15,13 @@ import org.json.*;
 import java.util.*;
 
 public class ReaderActivity extends Activity {
-    private String uri,title,type; private int page; private int pendingOffset=-1;
+    private String uri,title,type; private int page; private int pendingOffset=-1,pendingPage=-1;
     private LinearLayout root,toolbar,bottomPanel; private TextView pageText,status,titleView,fontValue,lineValue,chapterLabel; private SeekBar pageSeek;
     private DocumentParser.ParsedBook book; private android.graphics.pdf.PdfRenderer renderer; private ParcelFileDescriptor pdfFd; private ImageView pdfImage;
     private float downX; private int paperColor,textColor,fontSize,lineSpacing,paginationRevision; private final List<Integer> pageStarts=new ArrayList<>();
 
     @Override public void onCreate(Bundle b){
-        super.onCreate(b);uri=getIntent().getStringExtra("uri");title=getIntent().getStringExtra("title");type=getIntent().getStringExtra("type");page=LibraryStore.progress(this,uri);pendingOffset=getIntent().hasExtra("offset")?getIntent().getIntExtra("offset",0):LibraryStore.offset(this,uri);
+        super.onCreate(b);uri=getIntent().getStringExtra("uri");title=getIntent().getStringExtra("title");type=getIntent().getStringExtra("type");pendingPage=getIntent().hasExtra("page")?getIntent().getIntExtra("page",0):-1;page=pendingPage>=0?pendingPage:LibraryStore.progress(this,uri);pendingOffset=getIntent().hasExtra("offset")?getIntent().getIntExtra("offset",0):(pendingPage>=0?-1:LibraryStore.offset(this,uri));
         android.content.SharedPreferences p=getSharedPreferences("appearance",MODE_PRIVATE);paperColor=p.getInt("paper",0xfff5eedf);textColor=p.getInt("ink",0xff2f2c28);fontSize=p.getInt("font",20);lineSpacing=p.getInt("line_spacing",8);
         build();load();
     }
@@ -59,8 +59,8 @@ public class ReaderActivity extends Activity {
     private void paginate(){
         if(book==null)return;int width=pageText.getWidth()-pageText.getPaddingLeft()-pageText.getPaddingRight();int height=pageText.getHeight()-pageText.getPaddingTop()-pageText.getPaddingBottom();
         if(width<=0||height<=0){pageText.postDelayed(this::paginate,50);return;}
-        final int keepOffset=pendingOffset>=0?pendingOffset:currentOffset(),revision=++paginationRevision;pendingOffset=-1;pageText.setText("正在按章节重新分页…");TextPaint paint=new TextPaint(pageText.getPaint());String source=book.text;
-        new Thread(()->{List<Integer> starts=buildPageStarts(source,paint,width,height);runOnUiThread(()->{if(revision!=paginationRevision)return;pageStarts.clear();pageStarts.addAll(starts);page=findPageForOffset(Math.max(0,keepOffset));showPage();});}).start();
+        final int keepOffset=pendingOffset>=0?pendingOffset:currentOffset(),keepPage=pendingPage,revision=++paginationRevision;pendingOffset=-1;pendingPage=-1;pageText.setText("正在按章节重新分页…");TextPaint paint=new TextPaint(pageText.getPaint());String source=book.text;
+        new Thread(()->{List<Integer> starts=buildPageStarts(source,paint,width,height);runOnUiThread(()->{if(revision!=paginationRevision)return;pageStarts.clear();pageStarts.addAll(starts);page=keepPage>=0?Math.max(0,Math.min(keepPage,pageStarts.size()-1)):findPageForOffset(Math.max(0,keepOffset));showPage();});}).start();
     }
     private List<Integer> buildPageStarts(String source,TextPaint paint,int width,int height){
         List<Integer> starts=new ArrayList<>();if(source.isEmpty()){starts.add(0);return starts;}List<Integer> boundaries=new ArrayList<>();boundaries.add(0);
@@ -73,7 +73,7 @@ public class ReaderActivity extends Activity {
     private void showPage(){if(book==null||pageStarts.isEmpty())return;page=Math.max(0,Math.min(page,count()-1));int from=pageStarts.get(page),to=page+1<pageStarts.size()?pageStarts.get(page+1):book.text.length();chapterLabel.setText(currentChapterName(from));pageText.setText(book.text.substring(from,to));update();}
     private String currentChapterName(int offset){String name="正文";for(DocumentParser.Chapter c:book.chapters){if(c.offset<=offset)name=c.title;else break;}return name;}
     private void showPdf(){if(renderer==null)return;page=Math.max(0,Math.min(page,count()-1));chapterLabel.setText("PDF · 第 "+(page+1)+" 页");android.graphics.pdf.PdfRenderer.Page p=renderer.openPage(page);int w=Math.max(1,getResources().getDisplayMetrics().widthPixels);int h=w*p.getHeight()/p.getWidth();Bitmap bm=Bitmap.createBitmap(w,h,Bitmap.Config.ARGB_8888);bm.eraseColor(Color.WHITE);p.render(bm,null,null,android.graphics.pdf.PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY);p.close();pdfImage.setImageBitmap(bm);update();}
-    private void update(){LibraryStore.progress(this,uri,page);if(!"pdf".equals(type))LibraryStore.offset(this,uri,currentOffset());status.setText(String.format(Locale.getDefault(),"%d / %d   %s",page+1,count(),isMarked()?"★":""));if(pageSeek!=null){pageSeek.setMax(Math.max(1,count()-1));pageSeek.setProgress(page);}}
+    private void update(){LibraryStore.progress(this,uri,page);if(!"pdf".equals(type))LibraryStore.offset(this,uri,currentOffset());String flags=(isMarked()?"★ ":"")+(hasCurrentNote()?"✎":"");status.setText(String.format(Locale.getDefault(),"%d / %d   %s",page+1,count(),flags));if(pageSeek!=null){pageSeek.setMax(Math.max(1,count()-1));pageSeek.setProgress(page);}}
     private void next(){if(page<count()-1){page++;if("pdf".equals(type))showPdf();else showPage();}}
     private void prev(){if(page>0){page--;if("pdf".equals(type))showPdf();else showPage();}}
     private void toggleBars(){boolean show=toolbar.getVisibility()!=View.VISIBLE;toolbar.setVisibility(show?View.VISIBLE:View.GONE);bottomPanel.setVisibility(show?View.VISIBLE:View.GONE);}
@@ -101,7 +101,18 @@ public class ReaderActivity extends Activity {
     private boolean isMarked(){JSONArray a=marks();for(int i=0;i<a.length();i++)if(a.optInt(i)==page)return true;return false;}
     private void showBookmarks(){JSONArray a=marks();List<Integer> saved=new ArrayList<>();for(int i=0;i<a.length();i++)saved.add(a.optInt(i));Collections.sort(saved);String[] items=new String[saved.size()+1];items[0]=isMarked()?"★ 取消当前页书签":"☆ 为当前页添加书签";for(int i=0;i<saved.size();i++)items[i+1]="第 "+(saved.get(i)+1)+" 页";new AlertDialog.Builder(this).setTitle("书签").setItems(items,(d,w)->{if(w==0){toggleMark();return;}page=saved.get(w-1);if("pdf".equals(type))showPdf();else showPage();}).setNegativeButton("关闭",null).show();}
     private void toggleMark(){JSONArray a=marks(),n=new JSONArray();boolean removed=false;for(int i=0;i<a.length();i++){int x=a.optInt(i);if(x==page)removed=true;else n.put(x);}if(!removed)n.put(page);LibraryStore.bookmarks(this,uri,n.toString());update();Toast.makeText(this,removed?"已取消书签":"已添加书签",Toast.LENGTH_SHORT).show();}
-    private void editNote(){final EditText input=new EditText(this);input.setMinLines(4);input.setHint("记录这一页的想法…");JSONObject notes;try{notes=new JSONObject(LibraryStore.notes(this,uri));}catch(Exception e){notes=new JSONObject();}input.setText(notes.optString(String.valueOf(page),""));JSONObject finalNotes=notes;new AlertDialog.Builder(this).setTitle("第 "+(page+1)+" 页笔记").setView(input).setNegativeButton("取消",null).setNeutralButton("删除",(d,w)->{finalNotes.remove(String.valueOf(page));LibraryStore.notes(this,uri,finalNotes.toString());}).setPositiveButton("保存",(d,w)->{try{finalNotes.put(String.valueOf(page),input.getText().toString());}catch(Exception ignored){}LibraryStore.notes(this,uri,finalNotes.toString());}).show();}
+    private Book currentBook(){return new Book(uri,title,type);}
+    private Note currentNote(){return LibraryStore.note(this,currentBook(),page);}
+    private boolean hasCurrentNote(){return currentNote()!=null;}
+    private String currentQuote(){if("pdf".equals(type)||pageText==null)return"PDF 第 "+(page+1)+" 页";String q=pageText.getText().toString().replaceAll("\\s+"," ").trim();return q.length()>160?q.substring(0,160)+"…":q;}
+    private void editNote(){
+        Note old=currentNote();LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(18),dp(4),dp(18),0);
+        TextView meta=text(("pdf".equals(type)?"PDF":chapterLabel.getText())+" · 第 "+(page+1)+" 页",12,0xff8b8179);box.addView(meta,new LinearLayout.LayoutParams(-1,dp(30)));
+        String quote=currentQuote();TextView excerpt=text("“"+quote+"”",13,0xff77736e);excerpt.setMaxLines(3);excerpt.setEllipsize(android.text.TextUtils.TruncateAt.END);excerpt.setPadding(dp(12),dp(8),dp(12),dp(8));excerpt.setBackground(round(0xfff4f2ef,10));box.addView(excerpt,new LinearLayout.LayoutParams(-1,dp(70)));
+        EditText input=new EditText(this);input.setMinLines(4);input.setMaxLines(10);input.setHint("记录这一页带给你的想法…");input.setText(old==null?"":old.content);input.setSelection(input.length());input.setPadding(dp(12),dp(10),dp(12),dp(10));box.addView(input,new LinearLayout.LayoutParams(-1,dp(150)));
+        AlertDialog dialog=new AlertDialog.Builder(this).setTitle(old==null?"新增笔记":"编辑笔记").setView(box).setNegativeButton("取消",null).setNeutralButton(old==null?"查看全部":"删除",null).setPositiveButton("保存",null).create();
+        dialog.setOnShowListener(x->{dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v->{String value=input.getText().toString().trim();if(value.isEmpty()){input.setError("笔记内容不能为空");return;}LibraryStore.saveNote(this,new Note(uri,title,type,page,"pdf".equals(type)?-1:currentOffset(),chapterLabel.getText().toString(),quote,value,System.currentTimeMillis()));dialog.dismiss();update();Toast.makeText(this,"笔记已保存",Toast.LENGTH_SHORT).show();});dialog.getButton(AlertDialog.BUTTON_NEUTRAL).setOnClickListener(v->{if(old==null){startActivity(new Intent(this,NotesActivity.class));dialog.dismiss();}else new AlertDialog.Builder(this).setTitle("删除这条笔记？").setMessage("删除后无法恢复。").setNegativeButton("取消",null).setPositiveButton("删除",(d,w)->{LibraryStore.deleteNote(this,uri,page);dialog.dismiss();update();}).show();});});dialog.show();
+    }
     private void error(Exception e){new AlertDialog.Builder(this).setTitle("无法打开文档").setMessage(e.getMessage()==null?e.toString():e.getMessage()).setPositiveButton("返回",(d,w)->finish()).show();}
     private String stripExt(String s){int i=s.lastIndexOf('.');return i>0?s.substring(0,i):s;}
     private int dp(float v){return(int)(v*getResources().getDisplayMetrics().density+.5f);}
