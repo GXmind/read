@@ -86,4 +86,58 @@ public final class LibraryStore {
             notes(c, uri, root.toString());
         } catch (Exception ignored) { }
     }
+
+    public static List<Bookmark> bookmarksForBook(Context c, Book book) {
+        List<Bookmark> out = new ArrayList<>();
+        if (book == null) return out;
+        try {
+            JSONArray values = new JSONArray(bookmarks(c, book.uri));
+            for (int i = 0; i < values.length(); i++) {
+                Object value = values.opt(i);
+                if (value instanceof JSONObject) out.add(Bookmark.fromJson(book, (JSONObject)value));
+                else {
+                    int page = values.optInt(i, -1);
+                    if (page >= 0) out.add(new Bookmark(book.uri, book.title, book.type, page, -1, "", "", 0));
+                }
+            }
+        } catch (Exception ignored) { }
+        out.sort((a,b) -> Integer.compare(a.page,b.page));
+        return out;
+    }
+
+    public static List<Bookmark> allBookmarks(Context c) {
+        List<Bookmark> out = new ArrayList<>();
+        for (Book book : books(c)) out.addAll(bookmarksForBook(c, book));
+        out.sort((a,b) -> {
+            int recent = Long.compare(b.createdAt, a.createdAt);
+            return recent != 0 ? recent : Integer.compare(a.page, b.page);
+        });
+        return out;
+    }
+
+    public static Bookmark bookmark(Context c, Book book, int page) {
+        for (Bookmark bookmark : bookmarksForBook(c, book)) if (bookmark.page == page) return bookmark;
+        return null;
+    }
+
+    public static void saveBookmark(Context c, Bookmark bookmark) {
+        Book book = new Book(bookmark.bookUri, bookmark.bookTitle, bookmark.bookType);
+        JSONArray out = new JSONArray();
+        try {
+            for (Bookmark old : bookmarksForBook(c, book)) if (old.page != bookmark.page) out.put(old.toJson());
+            out.put(bookmark.toJson());
+            bookmarks(c, bookmark.bookUri, out.toString());
+        } catch (Exception ignored) { }
+    }
+
+    public static void deleteBookmark(Context c, String uri, int page) {
+        Book book = null;
+        for (Book candidate : books(c)) if (candidate.uri.equals(uri)) { book = candidate; break; }
+        if (book == null) return;
+        JSONArray out = new JSONArray();
+        try {
+            for (Bookmark old : bookmarksForBook(c, book)) if (old.page != page) out.put(old.toJson());
+            bookmarks(c, uri, out.toString());
+        } catch (Exception ignored) { }
+    }
 }

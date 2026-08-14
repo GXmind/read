@@ -59,7 +59,7 @@ public class NotesActivity extends Activity {
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
 
         if (notes.isEmpty()) addEmpty(); else for (Note note : notes) addCard(note);
-        setContentView(root);
+        setContentView(root);UiInsets.standard(this,root,Color.WHITE);
     }
 
     private void addEmpty() {

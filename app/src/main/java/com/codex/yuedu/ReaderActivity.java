@@ -18,7 +18,7 @@ public class ReaderActivity extends Activity {
     private String uri,title,type; private int page; private int pendingOffset=-1,pendingPage=-1;
     private LinearLayout root,toolbar,bottomPanel; private TextView pageText,status,titleView,fontValue,lineValue,chapterLabel; private SeekBar pageSeek;
     private DocumentParser.ParsedBook book; private android.graphics.pdf.PdfRenderer renderer; private ParcelFileDescriptor pdfFd; private ImageView pdfImage;
-    private float downX; private int paperColor,textColor,fontSize,lineSpacing,paginationRevision; private final List<Integer> pageStarts=new ArrayList<>();
+    private float downX; private int paperColor,textColor,fontSize,lineSpacing,paginationRevision; private String sourceIdentity; private final List<Integer> pageStarts=new ArrayList<>();
 
     @Override public void onCreate(Bundle b){
         super.onCreate(b);uri=getIntent().getStringExtra("uri");title=getIntent().getStringExtra("title");type=getIntent().getStringExtra("type");pendingPage=getIntent().hasExtra("page")?getIntent().getIntExtra("page",0):-1;page=pendingPage>=0?pendingPage:LibraryStore.progress(this,uri);pendingOffset=getIntent().hasExtra("offset")?getIntent().getIntExtra("offset",0):(pendingPage>=0?-1:LibraryStore.offset(this,uri));
@@ -29,7 +29,7 @@ public class ReaderActivity extends Activity {
     private TextView text(String s,float size,int color){TextView t=new TextView(this);t.setText(s);t.setTextSize(size);t.setTextColor(color);t.setGravity(Gravity.CENTER_VERTICAL);return t;}
 
     private void build(){
-        getWindow().setStatusBarColor(paperColor);getWindow().setNavigationBarColor(paperColor);getWindow().getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);
+        UiInsets.immersive(this);
         root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(paperColor);
         toolbar=new LinearLayout(this);toolbar.setGravity(Gravity.CENTER_VERTICAL);toolbar.setPadding(dp(8),0,dp(8),0);toolbar.setBackgroundColor(paperColor);toolbar.setElevation(dp(2));
         addTop("‹",v->finish(),48,30);titleView=text(stripExt(title),15,0xff48443f);titleView.setSingleLine();titleView.setEllipsize(android.text.TextUtils.TruncateAt.END);titleView.setGravity(Gravity.CENTER);toolbar.addView(titleView,new LinearLayout.LayoutParams(0,dp(54),1));addTop("⋯",v->showSettings(),48,28);toolbar.setVisibility(View.GONE);
@@ -53,14 +53,14 @@ public class ReaderActivity extends Activity {
     private LinearLayout action(String icon,String name,View.OnClickListener l){LinearLayout a=new LinearLayout(this);a.setOrientation(LinearLayout.VERTICAL);a.setGravity(Gravity.CENTER);TextView i=text(icon,icon.equals("Aa")?17:21,0xff3d3935);i.setGravity(Gravity.CENTER);a.addView(i,new LinearLayout.LayoutParams(-1,dp(36)));TextView n=text(name,12,0xff57514b);n.setGravity(Gravity.CENTER);a.addView(n,new LinearLayout.LayoutParams(-1,dp(30)));a.setOnClickListener(l);return a;}
     private void addTop(String s,View.OnClickListener l,int width,int size){TextView t=text(s,size,0xff393632);t.setGravity(Gravity.CENTER);t.setOnClickListener(l);toolbar.addView(t,new LinearLayout.LayoutParams(dp(width),dp(54)));}
 
-    private void load(){if("pdf".equals(type)){loadPdf();return;}pageText.setText("正在整理章节与排版…");new Thread(()->{try{DocumentParser.ParsedBook p=DocumentParser.parse(getContentResolver(),Uri.parse(uri),type);runOnUiThread(()->{book=p;pageText.post(this::paginate);});}catch(Exception e){runOnUiThread(()->error(e));}}).start();}
+    private void load(){if("pdf".equals(type)){loadPdf();return;}pageText.setText("正在恢复上次阅读…");new Thread(()->{try{Uri document=Uri.parse(uri);sourceIdentity=ParsedBookCache.sourceIdentity(getContentResolver(),document,type);DocumentParser.ParsedBook parsed=ParsedBookCache.load(this,sourceIdentity);if(parsed==null){parsed=DocumentParser.parse(getContentResolver(),document,type);ParsedBookCache.save(this,sourceIdentity,parsed);}DocumentParser.ParsedBook ready=parsed;runOnUiThread(()->{book=ready;pageText.post(this::paginate);});}catch(Exception e){runOnUiThread(()->error(e));}}).start();}
     private void loadPdf(){try{pdfFd=getContentResolver().openFileDescriptor(Uri.parse(uri),"r");renderer=new android.graphics.pdf.PdfRenderer(pdfFd);page=Math.max(0,Math.min(page,renderer.getPageCount()-1));pageText.setVisibility(View.GONE);pdfImage.setVisibility(View.VISIBLE);showPdf();}catch(Exception e){error(e);}}
     private int count(){if("pdf".equals(type))return renderer==null?0:renderer.getPageCount();return book==null?0:Math.max(1,pageStarts.size());}
     private void paginate(){
         if(book==null)return;int width=pageText.getWidth()-pageText.getPaddingLeft()-pageText.getPaddingRight();int height=pageText.getHeight()-pageText.getPaddingTop()-pageText.getPaddingBottom();
         if(width<=0||height<=0){pageText.postDelayed(this::paginate,50);return;}
-        final int keepOffset=pendingOffset>=0?pendingOffset:currentOffset(),keepPage=pendingPage,revision=++paginationRevision;pendingOffset=-1;pendingPage=-1;pageText.setText("正在按章节重新分页…");TextPaint paint=new TextPaint(pageText.getPaint());String source=book.text;
-        new Thread(()->{List<Integer> starts=buildPageStarts(source,paint,width,height);runOnUiThread(()->{if(revision!=paginationRevision)return;pageStarts.clear();pageStarts.addAll(starts);page=keepPage>=0?Math.max(0,Math.min(keepPage,pageStarts.size()-1)):findPageForOffset(Math.max(0,keepOffset));showPage();});}).start();
+        boolean preferOffset=pendingOffset>=0;final int keepOffset=preferOffset?pendingOffset:currentOffset(),keepPage=preferOffset?-1:pendingPage,revision=++paginationRevision;pendingOffset=-1;pendingPage=-1;pageText.setText("正在恢复上次排版…");TextPaint paint=new TextPaint(pageText.getPaint());String source=book.text;String cacheKey=PaginationCache.layoutKey(sourceIdentity==null?uri:sourceIdentity,source,width,height,Math.round(paint.getTextSize()),dp(lineSpacing));
+        new Thread(()->{List<Integer> starts=PaginationCache.load(this,cacheKey,source.length());if(starts==null){starts=buildPageStarts(source,paint,width,height);PaginationCache.save(this,cacheKey,starts);}List<Integer> ready=starts;runOnUiThread(()->{if(revision!=paginationRevision)return;pageStarts.clear();pageStarts.addAll(ready);page=keepPage>=0?Math.max(0,Math.min(keepPage,pageStarts.size()-1)):findPageForOffset(Math.max(0,keepOffset));showPage();});}).start();
     }
     private List<Integer> buildPageStarts(String source,TextPaint paint,int width,int height){
         List<Integer> starts=new ArrayList<>();if(source.isEmpty()){starts.add(0);return starts;}List<Integer> boundaries=new ArrayList<>();boundaries.add(0);
@@ -76,7 +76,7 @@ public class ReaderActivity extends Activity {
     private void update(){LibraryStore.progress(this,uri,page);if(!"pdf".equals(type))LibraryStore.offset(this,uri,currentOffset());String flags=(isMarked()?"★ ":"")+(hasCurrentNote()?"✎":"");status.setText(String.format(Locale.getDefault(),"%d / %d   %s",page+1,count(),flags));if(pageSeek!=null){pageSeek.setMax(Math.max(1,count()-1));pageSeek.setProgress(page);}}
     private void next(){if(page<count()-1){page++;if("pdf".equals(type))showPdf();else showPage();}}
     private void prev(){if(page>0){page--;if("pdf".equals(type))showPdf();else showPage();}}
-    private void toggleBars(){boolean show=toolbar.getVisibility()!=View.VISIBLE;toolbar.setVisibility(show?View.VISIBLE:View.GONE);bottomPanel.setVisibility(show?View.VISIBLE:View.GONE);}
+    private void toggleBars(){UiInsets.immersive(this);boolean show=toolbar.getVisibility()!=View.VISIBLE;toolbar.setVisibility(show?View.VISIBLE:View.GONE);bottomPanel.setVisibility(show?View.VISIBLE:View.GONE);}
 
     private void showSettings(){
         Dialog d=new Dialog(this);d.requestWindowFeature(Window.FEATURE_NO_TITLE);LinearLayout box=new LinearLayout(this);box.setOrientation(LinearLayout.VERTICAL);box.setPadding(dp(24),dp(20),dp(24),dp(26));box.setBackground(round(0xfffdfcf9,30));
@@ -94,13 +94,12 @@ public class ReaderActivity extends Activity {
     private void changeFont(int d){int keep=currentOffset();fontSize=Math.max(15,Math.min(30,fontSize+d));pageText.setTextSize(fontSize);if(fontValue!=null)fontValue.setText(String.valueOf(fontSize));getSharedPreferences("appearance",MODE_PRIVATE).edit().putInt("font",fontSize).apply();pendingOffset=keep;paginate();}
     private void changeLineSpacing(int delta){int keep=currentOffset();lineSpacing=Math.max(2,Math.min(18,lineSpacing+delta));pageText.setLineSpacing(dp(lineSpacing),1.05f);if(lineValue!=null)lineValue.setText(lineSpacingName());getSharedPreferences("appearance",MODE_PRIVATE).edit().putInt("line_spacing",lineSpacing).apply();pendingOffset=keep;paginate();}
     private String lineSpacingName(){if(lineSpacing<=4)return"紧凑";if(lineSpacing<=8)return"适中";if(lineSpacing<=12)return"宽松";return"超宽";}
-    private void applyTheme(int paper,int ink){paperColor=paper;textColor=ink;root.setBackgroundColor(paper);toolbar.setBackgroundColor(paper);bottomPanel.setBackground(round(paper,28));pageText.setTextColor(ink);pageText.setBackgroundColor(paper);chapterLabel.setTextColor((ink&0x00ffffff)|0x99000000);status.setTextColor((ink&0x00ffffff)|0x99000000);getWindow().setStatusBarColor(paper);getWindow().setNavigationBarColor(paper);getWindow().getDecorView().setSystemUiVisibility(paper==0xff25272a?0:View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR);getSharedPreferences("appearance",MODE_PRIVATE).edit().putInt("paper",paper).putInt("ink",ink).apply();}
+    private void applyTheme(int paper,int ink){paperColor=paper;textColor=ink;root.setBackgroundColor(paper);toolbar.setBackgroundColor(paper);bottomPanel.setBackground(round(paper,28));pageText.setTextColor(ink);pageText.setBackgroundColor(paper);chapterLabel.setTextColor((ink&0x00ffffff)|0x99000000);status.setTextColor((ink&0x00ffffff)|0x99000000);UiInsets.immersive(this);getSharedPreferences("appearance",MODE_PRIVATE).edit().putInt("paper",paper).putInt("ink",ink).apply();}
 
     private void showContents(){if("pdf".equals(type)){String[] pages=new String[count()];for(int i=0;i<count();i++)pages[i]="第 "+(i+1)+" 页";new AlertDialog.Builder(this).setTitle("选择页码").setItems(pages,(d,w)->{page=w;showPdf();}).show();return;}if(book==null)return;String[] names=book.chapters.stream().map(c->c.title).toArray(String[]::new);new AlertDialog.Builder(this).setTitle("目录").setItems(names,(d,w)->{page=findPageForOffset(book.chapters.get(w).offset);showPage();}).show();}
-    private JSONArray marks(){try{return new JSONArray(LibraryStore.bookmarks(this,uri));}catch(Exception e){return new JSONArray();}}
-    private boolean isMarked(){JSONArray a=marks();for(int i=0;i<a.length();i++)if(a.optInt(i)==page)return true;return false;}
-    private void showBookmarks(){JSONArray a=marks();List<Integer> saved=new ArrayList<>();for(int i=0;i<a.length();i++)saved.add(a.optInt(i));Collections.sort(saved);String[] items=new String[saved.size()+1];items[0]=isMarked()?"★ 取消当前页书签":"☆ 为当前页添加书签";for(int i=0;i<saved.size();i++)items[i+1]="第 "+(saved.get(i)+1)+" 页";new AlertDialog.Builder(this).setTitle("书签").setItems(items,(d,w)->{if(w==0){toggleMark();return;}page=saved.get(w-1);if("pdf".equals(type))showPdf();else showPage();}).setNegativeButton("关闭",null).show();}
-    private void toggleMark(){JSONArray a=marks(),n=new JSONArray();boolean removed=false;for(int i=0;i<a.length();i++){int x=a.optInt(i);if(x==page)removed=true;else n.put(x);}if(!removed)n.put(page);LibraryStore.bookmarks(this,uri,n.toString());update();Toast.makeText(this,removed?"已取消书签":"已添加书签",Toast.LENGTH_SHORT).show();}
+    private boolean isMarked(){return LibraryStore.bookmark(this,currentBook(),page)!=null;}
+    private void showBookmarks(){List<Bookmark> saved=LibraryStore.bookmarksForBook(this,currentBook());String[] items=new String[saved.size()+2];items[0]=isMarked()?"★ 取消当前页书签":"☆ 为当前页添加书签";items[1]="查看全部书签";for(int i=0;i<saved.size();i++){Bookmark mark=saved.get(i);items[i+2]=(mark.chapter.isEmpty()?"第 "+(mark.page+1)+" 页":mark.chapter+" · 第 "+(mark.page+1)+" 页");}new AlertDialog.Builder(this).setTitle("书签").setItems(items,(d,w)->{if(w==0){toggleMark();return;}if(w==1){startActivity(new Intent(this,BookmarksActivity.class));return;}Bookmark mark=saved.get(w-2);pendingOffset=mark.offset;page=mark.page;if("pdf".equals(type))showPdf();else if(mark.offset>=0){page=findPageForOffset(mark.offset);showPage();}else showPage();}).setNegativeButton("关闭",null).show();}
+    private void toggleMark(){Bookmark old=LibraryStore.bookmark(this,currentBook(),page);if(old!=null)LibraryStore.deleteBookmark(this,uri,page);else LibraryStore.saveBookmark(this,new Bookmark(uri,title,type,page,"pdf".equals(type)?-1:currentOffset(),chapterLabel.getText().toString(),currentQuote(),System.currentTimeMillis()));update();Toast.makeText(this,old!=null?"已取消书签":"已添加书签",Toast.LENGTH_SHORT).show();}
     private Book currentBook(){return new Book(uri,title,type);}
     private Note currentNote(){return LibraryStore.note(this,currentBook(),page);}
     private boolean hasCurrentNote(){return currentNote()!=null;}
@@ -116,6 +115,7 @@ public class ReaderActivity extends Activity {
     private void error(Exception e){new AlertDialog.Builder(this).setTitle("无法打开文档").setMessage(e.getMessage()==null?e.toString():e.getMessage()).setPositiveButton("返回",(d,w)->finish()).show();}
     private String stripExt(String s){int i=s.lastIndexOf('.');return i>0?s.substring(0,i):s;}
     private int dp(float v){return(int)(v*getResources().getDisplayMetrics().density+.5f);}
+    @Override public void onWindowFocusChanged(boolean hasFocus){super.onWindowFocusChanged(hasFocus);if(hasFocus)UiInsets.immersive(this);}
     @Override protected void onPause(){super.onPause();LibraryStore.progress(this,uri,page);if(!"pdf".equals(type)&&book!=null)LibraryStore.offset(this,uri,currentOffset());}
     @Override protected void onDestroy(){super.onDestroy();if(renderer!=null)renderer.close();try{if(pdfFd!=null)pdfFd.close();}catch(Exception ignored){}}
 }
