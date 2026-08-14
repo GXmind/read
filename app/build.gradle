@@ -1,0 +1,44 @@
+plugins { id 'com.android.application' }
+
+def yueduKeystore = System.getenv('YUEDU_KEYSTORE')
+
+android {
+    namespace 'com.codex.yuedu'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.codex.yuedu'
+        minSdk 26
+        targetSdk 35
+        versionCode 5
+        versionName '1.3.0'
+    }
+
+    signingConfigs {
+        secureRelease {
+            if (yueduKeystore) {
+                storeFile file(yueduKeystore)
+                storePassword System.getenv('YUEDU_STORE_PASSWORD')
+                keyAlias System.getenv('YUEDU_KEY_ALIAS') ?: 'yuedu-release'
+                keyPassword System.getenv('YUEDU_KEY_PASSWORD')
+                enableV1Signing true
+                enableV2Signing true
+                enableV3Signing true
+                enableV4Signing true
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (yueduKeystore) signingConfig signingConfigs.secureRelease
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
