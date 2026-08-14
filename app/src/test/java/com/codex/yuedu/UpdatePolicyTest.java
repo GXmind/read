@@ -21,4 +21,17 @@ public class UpdatePolicyTest {
     @Test public void appliesBoundedDownloadPolicy() {
         assertEquals(300L*1024L*1024L,UpdatePolicy.MAX_APK_BYTES);
     }
+
+    @Test public void createsContentSpecificInstallRevision() {
+        String first=UpdatePolicy.installRevision("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",49855);
+        String second=UpdatePolicy.installRevision("bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",49855);
+        assertEquals("aaaaaaaaaaaaaaaaaaaa-49855",first);
+        assertNotEquals(first,second);
+        assertEquals("yuedu-update-aaaaaaaaaaaaaaaaaaaa-49855.apk",UpdatePolicy.installFileName("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",49855));
+    }
+
+    @Test(expected=IllegalArgumentException.class)
+    public void rejectsInvalidInstallRevisionDigest() {
+        UpdatePolicy.installRevision("not-a-digest",100);
+    }
 }
