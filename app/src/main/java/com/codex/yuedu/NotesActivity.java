@@ -78,9 +78,9 @@ public class NotesActivity extends Activity {
     private void addCard(Note note) {
         LinearLayout card = new LinearLayout(this);
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(dp(18), dp(15), dp(18), dp(13));
-        card.setBackground(round(Color.WHITE, 16));
-        card.setElevation(dp(1));
+        card.setPadding(dp(20), dp(17), dp(20), dp(15));
+        card.setBackground(round(Color.WHITE, 24));
+        card.setElevation(dp(2));
 
         LinearLayout meta = new LinearLayout(this); meta.setGravity(Gravity.CENTER_VERTICAL);
         TextView book = text(stripExt(note.bookTitle), 15, 0xff29292d); book.setTypeface(Typeface.DEFAULT, Typeface.BOLD); book.setSingleLine(); book.setEllipsize(TextUtils.TruncateAt.END);
@@ -94,7 +94,7 @@ public class NotesActivity extends Activity {
             card.addView(chapter, new LinearLayout.LayoutParams(-1, dp(26)));
         }
         if (!note.quote.isEmpty()) {
-            TextView quote = text("“" + note.quote + "”", 13, 0xff77777c); quote.setMaxLines(2); quote.setEllipsize(TextUtils.TruncateAt.END); quote.setPadding(dp(10), dp(7), dp(10), dp(7)); quote.setBackground(round(0xfff6f4f1, 9));
+            TextView quote = text("“" + note.quote + "”", 13, 0xff77777c); quote.setMaxLines(2); quote.setEllipsize(TextUtils.TruncateAt.END); quote.setPadding(dp(12), dp(8), dp(12), dp(8)); quote.setBackground(round(0xfff6f4f1, 16));
             card.addView(quote, new LinearLayout.LayoutParams(-1, dp(58)));
         }
         TextView body = text(note.content, 16, 0xff343438); body.setPadding(0, dp(10), 0, dp(6)); body.setMaxLines(5); body.setEllipsize(TextUtils.TruncateAt.END);
@@ -117,7 +117,7 @@ public class NotesActivity extends Activity {
     }
 
     private void edit(Note old) {
-        EditText input = new EditText(this); input.setMinLines(4); input.setMaxLines(10); input.setText(old.content); input.setSelection(input.length()); input.setHint("记录你的想法…"); input.setPadding(dp(18), dp(12), dp(18), dp(12)); input.setBackground(round(0xfff5f5f6, 12));
+        EditText input = new EditText(this); input.setMinLines(4); input.setMaxLines(10); input.setText(old.content); input.setSelection(input.length()); input.setHint("记录你的想法…"); input.setPadding(dp(18), dp(14), dp(18), dp(14)); input.setBackground(round(0xfff5f5f6, 18));
         AlertDialog dialog = new AlertDialog.Builder(this).setTitle(stripExt(old.bookTitle) + " · 第 " + (old.page + 1) + " 页").setView(input).setNegativeButton("取消", null).setPositiveButton("保存", null).create();
         dialog.setOnShowListener(x -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(v -> {
             String content = input.getText().toString().trim(); if (content.isEmpty()) { input.setError("笔记内容不能为空"); return; }
