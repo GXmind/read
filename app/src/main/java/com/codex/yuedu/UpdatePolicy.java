@@ -12,4 +12,10 @@ final class UpdatePolicy {
     private static final Set<String> ALLOWED_HOSTS=new HashSet<>(Arrays.asList("api.github.com","github.com","objects.githubusercontent.com","release-assets.githubusercontent.com","github-releases.githubusercontent.com"));
     private UpdatePolicy(){}
     static boolean isTrustedUrl(URL url){return "https".equalsIgnoreCase(url.getProtocol())&&url.getUserInfo()==null&&url.getPort()==-1&&ALLOWED_HOSTS.contains(url.getHost().toLowerCase(Locale.ROOT));}
+    static String installRevision(String sha256,long size){
+        String digest=sha256==null?"":sha256.trim().toLowerCase(Locale.ROOT);
+        if(!digest.matches("[0-9a-f]{64}"))throw new IllegalArgumentException("Invalid SHA-256");
+        return digest.substring(0,20)+"-"+size;
+    }
+    static String installFileName(String sha256,long size){return "yuedu-update-"+installRevision(sha256,size)+".apk";}
 }

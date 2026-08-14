@@ -14,8 +14,9 @@ import java.io.FileNotFoundException;
 public final class UpdateFileProvider extends ContentProvider {
     @Override public boolean onCreate(){return true;}
     private File resolve(Uri uri) throws FileNotFoundException {
-        if(getContext()==null||!"yuedu-update.apk".equals(uri.getLastPathSegment()))throw new FileNotFoundException("Invalid update path");
-        File base=new File(getContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),"updates");File target=new File(base,"yuedu-update.apk");
+        String name=uri.getLastPathSegment();
+        if(getContext()==null||name==null||!name.matches("yuedu-update-[0-9a-f]{20}-[0-9]+\\.apk"))throw new FileNotFoundException("Invalid update path");
+        File base=new File(getContext().getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS),"updates");File target=new File(base,name);
         try{if(!target.getCanonicalPath().startsWith(base.getCanonicalPath()+File.separator))throw new FileNotFoundException("Path rejected");}catch(java.io.IOException e){throw new FileNotFoundException("Path rejected");}return target;
     }
     @Override public String getType(Uri uri){return "application/vnd.android.package-archive";}
