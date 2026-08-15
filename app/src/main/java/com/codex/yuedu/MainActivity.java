@@ -63,7 +63,7 @@ public class MainActivity extends Activity {
         for(Book book:books)addBookTile(grid,book);
         content.addView(grid);
         LinearLayout.LayoutParams navLp=new LinearLayout.LayoutParams(-1,dp(70));navLp.setMargins(dp(12),0,dp(12),dp(12));root.addView(bottomNav(),navLp);
-        setContentView(root);
+        setContentView(root);UiInsets.standard(this,root,Color.WHITE);
     }
 
     private TextView tab(String text,boolean selected){TextView t=label(text,selected?17:15,selected?Color.rgb(25,25,27):Color.rgb(145,145,150));t.setGravity(Gravity.CENTER);if(selected)t.setTypeface(Typeface.DEFAULT,Typeface.BOLD);t.setPadding(0,0,dp(26),0);return t;}
@@ -86,13 +86,14 @@ public class MainActivity extends Activity {
     private String shortTitle(String s){String n=stripExt(s);return n.length()>8?n.substring(0,8)+"\n…":n;}
     private String stripExt(String s){int i=s.lastIndexOf('.');return i>0?s.substring(0,i):s;}
 
-    private LinearLayout bottomNav(){LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(dp(10),dp(4),dp(10),dp(4));nav.setBackground(rounded(Color.WHITE,24));nav.setElevation(dp(12));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-1,1);nav.addView(navItem("▣","书架",true),p);nav.addView(navItem("▤","本地",false),p);LinearLayout notes=navItem("✎","笔记",false);notes.setOnClickListener(v->openNotes());nav.addView(notes,p);LinearLayout mine=navItem("○","更新",false);mine.setOnClickListener(v->startActivity(new Intent(this,UpdateActivity.class)));nav.addView(mine,p);return nav;}
+    private LinearLayout bottomNav(){LinearLayout nav=new LinearLayout(this);nav.setGravity(Gravity.CENTER);nav.setPadding(dp(10),dp(4),dp(10),dp(4));nav.setBackground(rounded(Color.WHITE,24));nav.setElevation(dp(12));LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-1,1);nav.addView(navItem("▣","书架",true),p);LinearLayout bookmarks=navItem("☆","书签",false);bookmarks.setOnClickListener(v->openBookmarks());nav.addView(bookmarks,p);LinearLayout notes=navItem("✎","笔记",false);notes.setOnClickListener(v->openNotes());nav.addView(notes,p);LinearLayout mine=navItem("○","更新",false);mine.setOnClickListener(v->startActivity(new Intent(this,UpdateActivity.class)));nav.addView(mine,p);return nav;}
     private LinearLayout navItem(String icon,String text,boolean on){LinearLayout item=new LinearLayout(this);item.setOrientation(LinearLayout.VERTICAL);item.setGravity(Gravity.CENTER);TextView i=label(icon,21,on?ACCENT:Color.rgb(130,130,135));i.setGravity(Gravity.CENTER);item.addView(i,new LinearLayout.LayoutParams(-1,dp(29)));TextView t=label(text,11,on?ACCENT:Color.rgb(120,120,125));t.setGravity(Gravity.CENTER);item.addView(t,new LinearLayout.LayoutParams(-1,dp(25)));if(!on)item.setOnClickListener(v->Toast.makeText(this,"该页面将在后续版本开放",Toast.LENGTH_SHORT).show());return item;}
 
     private void pick() {Intent i=new Intent(Intent.ACTION_OPEN_DOCUMENT);i.addCategory(Intent.CATEGORY_OPENABLE);i.setType("*/*");i.putExtra(Intent.EXTRA_MIME_TYPES,new String[]{"text/plain","application/epub+zip","application/pdf","application/vnd.openxmlformats-officedocument.wordprocessingml.document"});startActivityForResult(i,PICK);}
     @Override protected void onActivityResult(int r,int c,Intent data){super.onActivityResult(r,c,data);if(r==PICK&&c==RESULT_OK&&data!=null)importUri(data.getData());}
     private void importUri(Uri uri){if(uri==null)return;try{getContentResolver().takePersistableUriPermission(uri,Intent.FLAG_GRANT_READ_URI_PERMISSION);}catch(Exception ignored){}String name=name(uri),type=extension(name);if(type==null){Toast.makeText(this,"暂不支持该文件，请选择 TXT、EPUB、DOCX 或 PDF",Toast.LENGTH_LONG).show();return;}Book b=new Book(uri.toString(),name,type);LibraryStore.add(this,b);open(b);}
     private void open(Book b){startActivity(new Intent(this,ReaderActivity.class).putExtra("uri",b.uri).putExtra("title",b.title).putExtra("type",b.type));}
+    private void openBookmarks(){startActivity(new Intent(this,BookmarksActivity.class));}
     private void openNotes(){startActivity(new Intent(this,NotesActivity.class));}
     private String name(Uri uri){String n=null;try(Cursor c=getContentResolver().query(uri,null,null,null,null)){if(c!=null&&c.moveToFirst()){int i=c.getColumnIndex(OpenableColumns.DISPLAY_NAME);if(i>=0)n=c.getString(i);}}return n==null?"未命名文档":n;}
     private String extension(String n){String s=n.toLowerCase(Locale.ROOT);if(s.endsWith(".txt"))return"txt";if(s.endsWith(".epub"))return"epub";if(s.endsWith(".docx"))return"docx";if(s.endsWith(".pdf"))return"pdf";return null;}
