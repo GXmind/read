@@ -15,8 +15,11 @@ public final class SplashActivity extends Activity {
 
     @Override public void onCreate(Bundle state) {
         super.onCreate(state);
-        UiInsets.immersive(this);
-        setContentView(new BookSplashView(this));
+        BookSplashView splash = new BookSplashView(this);
+        setContentView(splash);
+        splash.post(() -> {
+            if (!isFinishing() && !isDestroyed()) UiInsets.immersive(this);
+        });
         handler.postDelayed(openLibrary, 1650);
     }
 
